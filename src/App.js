@@ -1,26 +1,66 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import Users from './Users';
+import {gql} from 'apollo-boost';
+import {BrowserRouter} from 'react-router-dom';
+import AuthorizedUser from './AuthorizedUser';
+import {withApollo} from 'react-apollo';
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+export const ROOT_QUERY = gql(`
+  query allUsers {
+    totalUsers
+    allUsers {
+      ...userInfo
+    }
+    me {
+      ...userInfo
+    }
+  }
+
+  fragment userInfo on User {
+    githubLogin
+    name
+    avatar
+  }
+`);
+
+export const LISTEN_FOR_USERS = gql(`
+  subscription {
+    newUser {
+      name
+      avatar
+    }
+  }
+`);
+
+class App extends React.Component {
+
+  componentDidMount() {
+    let {client} = this.props;
+    this.listenForUsers = client.subscribe({query: LISTEN_FOR_USERS}).subscribe(
+      ({data:{newUser}}) => {
+        const data = client.readQuery({query: ROOT_QUERY});
+        data.totalUsers += 1;
+        data.allUsers = [
+          ...data.allUsers,
+          newUser
+        ];
+        client.writeQuery({query: ROOT_QUERY, data});
+      });
+  }
+
+  componentWillUnmount() {
+    this.listenForUsers.unsubscribe();
+  }
+
+  render() {
+    return (
+      <BrowserRouter>
+        <AuthorizedUser />
+        <Users />
+      </BrowserRouter>
+    );
+  }
+
 }
 
-export default App;
+export default withApollo(App);
